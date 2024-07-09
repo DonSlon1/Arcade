@@ -13,35 +13,17 @@ class ApiService(private val apiKey: String) {
 
     private fun getHeaders() = mapOf("Authorization" to "Bearer $apiKey")
 
-    private fun <T> logResponse(endpoint: String, result: Result<String, Exception>, responseClass: Class<T>) {
-        when (result) {
-            is Result.Success -> {
-                logger.info("Successful API call to $endpoint")
-                logger.debug("Response: ${result.value}")
-                try {
-                    val response = gson.fromJson(result.value, responseClass)
-                    logger.debug("Parsed response: $response")
-                } catch (e: Exception) {
-                    logger.error("Failed to parse response from $endpoint", e)
-                }
-            }
-            is Result.Failure -> {
-                logger.error("API call to $endpoint failed", result.error)
-            }
-        }
-    }
-
     fun getSession(slackId: String): Session? {
-        val endpoint = "$baseUrl/api/session/$slackId"
-        val (_, _, result) = Fuel.get(endpoint)
+        val (_, _, result) = Fuel.get("$baseUrl/api/session/$slackId")
             .header(getHeaders())
             .responseString()
 
-        logResponse(endpoint, result, SessionResponse::class.java)
-
         return when (result) {
             is Result.Success -> gson.fromJson(result.value, SessionResponse::class.java).data
-            else -> null
+            else -> {
+                logger.error("Failed to get session")
+                null
+            }
         }
     }
 
@@ -52,7 +34,10 @@ class ApiService(private val apiKey: String) {
 
         return when (result) {
             is Result.Success -> gson.fromJson(result.value, StatsResponse::class.java).data
-            else -> null
+            else -> {
+                logger.error("Failed to get stats")
+                null
+            }
         }
     }
 
@@ -63,35 +48,64 @@ class ApiService(private val apiKey: String) {
 
         return when (result) {
             is Result.Success -> gson.fromJson(result.value, GoalsResponse::class.java).data.goals
-            else -> null
+            else -> {
+                logger.error("Failed to get goals")
+                null
+            }
         }
     }
 
-    fun getHistory(slackId: String): List<HistoryItem>? {
+    fun stopSession(slackId: String): Session? {
+        val (_, _, result) = Fuel.post("$baseUrl/api/stop/$slackId")
+            .header(getHeaders())
+            .responseString()
+
+        return when (result) {
+            is Result.Success -> {
+                val stoppedSession = gson.fromJson(result.value, SessionResponse::class.java).data
+                currentSession = null
+                stoppedSession
+            }
+            else -> {
+                logger.error("Failed to stop session")
+                null
+            }
+        }
+    }
+
+    fun getSessions(slackId: String): List<Session>? {
         val (_, _, result) = Fuel.get("$baseUrl/api/history/$slackId")
             .header(getHeaders())
             .responseString()
 
         return when (result) {
-            is Result.Success -> gson.fromJson(result.value, HistoryResponse::class.java).data
-            else -> null
+            is Result.Success -> gson.fromJson(result.value, SessionListResponse::class.java).data
+            else -> {
+                logger.error("Failed to fetch sessions")
+                null
+            }
         }
     }
 
+    private var currentSession: Session? = null
+
+    fun getCurrentSession(): Session? = currentSession
+
     fun startSession(slackId: String, work: String): Session? {
-        val endpoint = "$baseUrl/api/start/$slackId"
-        logger.info("Starting session for work: $work")
-        logger.info("API endpoint: $endpoint")
-        val (_, _, result) = Fuel.post(endpoint)
+        val (_, _, result) = Fuel.post("$baseUrl/api/start/$slackId")
             .header(getHeaders())
             .jsonBody("""{"work": "$work"}""")
             .responseString()
 
-        logResponse(endpoint, result, SessionResponse::class.java)
-
         return when (result) {
-            is Result.Success -> gson.fromJson(result.value, SessionResponse::class.java).data
-            else -> null
+            is Result.Success -> {
+                currentSession = gson.fromJson(result.value, SessionResponse::class.java).data
+                currentSession
+            }
+            else -> {
+                logger.error("Failed to start session")
+                null
+            }
         }
     }
 
@@ -101,8 +115,14 @@ class ApiService(private val apiKey: String) {
             .responseString()
 
         return when (result) {
-            is Result.Success -> gson.fromJson(result.value, SessionResponse::class.java).data
-            else -> null
+            is Result.Success -> {
+                currentSession = gson.fromJson(result.value, SessionResponse::class.java).data
+                currentSession
+            }
+            else -> {
+                logger.error("Failed to pause/resume session")
+                null
+            }
         }
     }
 
@@ -112,9 +132,25 @@ class ApiService(private val apiKey: String) {
             .responseString()
 
         return when (result) {
-            is Result.Success -> gson.fromJson(result.value, SessionResponse::class.java).data
-            else -> null
+            is Result.Success -> {
+                val cancelledSession = gson.fromJson(result.value, SessionResponse::class.java).data
+                currentSession = null
+                cancelledSession
+            }
+            else -> {
+                logger.error("Failed to cancel session")
+                null
+            }
         }
+    }
+
+    fun hasActiveSession(slackId: String): Boolean {
+        if (currentSession != null && !currentSession!!.completed) {
+            return true
+        }
+        val session = getSession(slackId)
+        currentSession = session
+        return session != null && !session.completed
     }
 }
 
@@ -122,7 +158,7 @@ class ApiService(private val apiKey: String) {
 data class SessionResponse(val ok: Boolean, val data: Session)
 data class StatsResponse(val ok: Boolean, val data: Stats)
 data class GoalsResponse(val ok: Boolean, val data: GoalsData)
-data class HistoryResponse(val ok: Boolean, val data: List<HistoryItem>)
+data class SessionListResponse(val ok: Boolean, val data: List<Session>)
 
 data class Session(
     val id: String,
@@ -134,17 +170,10 @@ data class Session(
     val goal: String,
     val paused: Boolean,
     val completed: Boolean,
-    val messageTs: String
+    val messageTs: String,
+    val work: String
 )
 
 data class Stats(val sessions: Int, val total: Int)
 data class GoalsData(val goals: List<Goal>)
 data class Goal(val name: String, val minutes: Int)
-data class HistoryItem(
-    val createdAt: String,
-    val time: Int,
-    val elapsed: Int,
-    val goal: String,
-    val ended: Boolean,
-    val work: String
-)
