@@ -5,100 +5,154 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.github.donslon1.arcade.services.ApiService
 import com.github.donslon1.arcade.services.ApiSettings
+import com.github.donslon1.arcade.services.Session
 import javax.swing.*
+import java.awt.BorderLayout
+import java.awt.Dimension
 
-class HackHourPanel(private val project: Project) : JPanel() {
+class HackHourPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val startButton = JButton("Start Session")
     private val pauseResumeButton = JButton("Pause/Resume")
+    private val stopButton = JButton("Stop Session")
     private val cancelButton = JButton("Cancel Session")
     private val workField = JTextField(20)
+    private val sessionList = JList<String>()
+    private val currentSessionLabel = JLabel()
     private val logger = Logger.getInstance(HackHourPanel::class.java)
+    private var apiService: ApiService? = null
+    private var slackId: String = ""
+    private var updateTimer: Timer? = null
 
     init {
-        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        val apiSettings = ApiSettings.getInstance(project)
+        apiService = ApiService(apiSettings.apiKey)
+        slackId = apiSettings.slackId
 
-        add(JLabel("What are you working on?"))
-        add(workField)
-        add(startButton)
-        add(pauseResumeButton)
-        add(cancelButton)
+        val controlPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            add(JLabel("What are you working on?"))
+            add(workField)
+            add(createButtonPanel())
+        }
+
+        add(controlPanel, BorderLayout.NORTH)
+        add(JScrollPane(sessionList), BorderLayout.CENTER)
+        add(currentSessionLabel, BorderLayout.SOUTH)
 
         startButton.addActionListener { startSession() }
         pauseResumeButton.addActionListener { pauseResumeSession() }
+        stopButton.addActionListener { stopSession() }
         cancelButton.addActionListener { cancelSession() }
+
+        updateSessionList()
+        updateButtonStates()
+        startUpdateTimer()
     }
 
-    private fun getApiServiceAndSlackId(): Pair<ApiService?, String> {
-        val apiSettings = ApiSettings.getInstance(project)
-        val apiKey = apiSettings.apiKey
-        val slackId = apiSettings.slackId
-
-        if (apiKey.isBlank()) {
-            logger.warn("API key is not set")
-            Messages.showErrorDialog(project, "Please set your API key in the settings.", "API Key Missing")
-            return null to ""
+    private fun createButtonPanel(): JPanel {
+        return JPanel().apply {
+            add(startButton)
+            add(pauseResumeButton)
+            add(stopButton)
+            add(cancelButton)
         }
+    }
 
-        if (slackId.isBlank()) {
-            logger.warn("Slack ID is not set")
-            Messages.showErrorDialog(project, "Please set your Slack ID in the settings.", "Slack ID Missing")
-            return null to ""
-        }
-
-        return ApiService(apiKey) to slackId
+    private fun updateButtonStates() {
+        val hasActiveSession = apiService?.hasActiveSession(slackId) ?: false
+        startButton.isEnabled = !hasActiveSession
+        pauseResumeButton.isEnabled = hasActiveSession
+        stopButton.isEnabled = hasActiveSession
+        cancelButton.isEnabled = hasActiveSession
+        workField.isEnabled = !hasActiveSession
     }
 
     private fun startSession() {
-        val (apiService, slackId) = getApiServiceAndSlackId()
-        if (apiService == null) return
-
         val work = workField.text
-
         if (work.isBlank()) {
-            logger.warn("Attempted to start session with blank work description")
             Messages.showWarningDialog(project, "Please enter what you're working on", "Hack Hour")
             return
         }
 
-        logger.info("Starting session for work: $work")
-        val session = apiService.startSession(slackId, work)
-        if (session != null) {
-            logger.info("Session started successfully: $session")
+        apiService?.startSession(slackId, work)?.let {
             Messages.showInfoMessage(project, "Session started successfully!", "Hack Hour")
-        } else {
-            logger.error("Failed to start session")
-            Messages.showErrorDialog(project, "Failed to start session", "Hack Hour")
-        }
+            updateSessionList()
+            updateButtonStates()
+            updateCurrentSessionInfo()
+        } ?: Messages.showErrorDialog(project, "Failed to start session", "Hack Hour")
     }
 
     private fun pauseResumeSession() {
-        val (apiService, slackId) = getApiServiceAndSlackId()
-        if (apiService == null) return
-
-        logger.info("Attempting to pause/resume session")
-        val session = apiService.pauseResumeSession(slackId)
-        if (session != null) {
-            val status = if (session.paused) "paused" else "resumed"
-            logger.info("Session $status successfully: $session")
+        apiService?.pauseResumeSession(slackId)?.let {
+            val status = if (it.paused) "paused" else "resumed"
             Messages.showInfoMessage(project, "Session $status successfully!", "Hack Hour")
-        } else {
-            logger.error("Failed to pause/resume session")
-            Messages.showErrorDialog(project, "Failed to pause/resume session", "Hack Hour")
-        }
+            updateButtonStates()
+            updateCurrentSessionInfo()
+        } ?: Messages.showErrorDialog(project, "Failed to pause/resume session", "Hack Hour")
+    }
+
+    private fun stopSession() {
+        apiService?.stopSession(slackId)?.let {
+            Messages.showInfoMessage(project, "Session stopped successfully!", "Hack Hour")
+            updateSessionList()
+            updateButtonStates()
+            updateCurrentSessionInfo()
+        } ?: Messages.showErrorDialog(project, "Failed to stop session", "Hack Hour")
     }
 
     private fun cancelSession() {
-        val (apiService, slackId) = getApiServiceAndSlackId()
-        if (apiService == null) return
-
-        logger.info("Attempting to cancel session")
-        val session = apiService.cancelSession(slackId)
-        if (session != null) {
-            logger.info("Session canceled successfully: $session")
-            Messages.showInfoMessage(project, "Session canceled successfully!", "Hack Hour")
-        } else {
-            logger.error("Failed to cancel session")
-            Messages.showErrorDialog(project, "Failed to cancel session", "Hack Hour")
+        val result = Messages.showYesNoDialog(
+            project,
+            "Are you sure you want to cancel the current session? This action cannot be undone.",
+            "Cancel Session",
+            Messages.getQuestionIcon()
+        )
+        if (result == Messages.YES) {
+            apiService?.cancelSession(slackId)?.let {
+                Messages.showInfoMessage(project, "Session canceled successfully!", "Hack Hour")
+                updateSessionList()
+                updateButtonStates()
+                updateCurrentSessionInfo()
+            } ?: Messages.showErrorDialog(project, "Failed to cancel session", "Hack Hour")
         }
+    }
+
+    private fun updateSessionList() {
+        apiService?.getSessions(slackId)?.let { sessions ->
+            val sessionStrings = sessions.map { "${it.work} (${formatDuration(it.elapsed)})" }
+            sessionList.setListData(sessionStrings.toTypedArray())
+        }
+    }
+
+    private fun updateCurrentSessionInfo() {
+        val currentSession = apiService?.getCurrentSession()
+        if (currentSession != null) {
+            val elapsedTime = formatDuration(currentSession.elapsed)
+            val status = if (currentSession.paused) "Paused" else "Running"
+            currentSessionLabel.text = "Current Session: ${currentSession.work} - $elapsedTime - $status"
+        } else {
+            currentSessionLabel.text = "No active session"
+        }
+    }
+
+    private fun startUpdateTimer() {
+        updateTimer = Timer(5000) { // Update every 5 seconds
+            SwingUtilities.invokeLater {
+                updateCurrentSessionInfo()
+                updateButtonStates()
+            }
+        }
+        updateTimer?.start()
+    }
+
+    private fun formatDuration(minutes: Int): String {
+        val hours = minutes / 60
+        val mins = minutes % 60
+        return if (hours > 0) "$hours h $mins min" else "$mins min"
+    }
+
+    override fun removeNotify() {
+        super.removeNotify()
+        updateTimer?.stop()
     }
 }
