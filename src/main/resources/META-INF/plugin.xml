@@ -1,5 +1,6 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
+    <!-- Other plugin information -->
     <id>com.github.donslon1.arcade</id>
     <name>Arcade</name>
     <vendor>donslon1</vendor>
@@ -9,10 +10,39 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.donslon1.arcade.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
+        <projectService serviceImplementation="com.github.donslon1.arcade.services.ApiSettings"/>
+        <postStartupActivity implementation="com.github.donslon1.arcade.startup.ApiKeyStartupActivity"/>
+        <toolWindow id="Hack Hour"
+                    secondary="true"
+                    icon="AllIcons.General.Modified"
+                    anchor="right"
+                    factoryClass="com.github.donslon1.arcade.toolWindow.HackHourToolWindow"/>
     </extensions>
 
-    <applicationListeners>
-        <listener class="com.github.donslon1.arcade.listeners.MyApplicationActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
-    </applicationListeners>
+    <actions>
+        <action id="Arcade.SetApiKey"
+                class="com.github.donslon1.arcade.actions.SetApiKeyAction"
+                text="Set API Key"
+                description="Set the API key for Arcade">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        <action id="Arcade.StartSession"
+                class="com.github.donslon1.arcade.actions.StartSessionAction"
+                text="Start Hack Hour Session"
+                description="Start a new Hack Hour session">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        <action id="Arcade.PauseResumeSession"
+                class="com.github.donslon1.arcade.actions.PauseResumeSessionAction"
+                text="Pause/Resume Hack Hour Session"
+                description="Pause or resume the current Hack Hour session">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+        <action id="Arcade.CancelSession"
+                class="com.github.donslon1.arcade.actions.CancelSessionAction"
+                text="Cancel Hack Hour Session"
+                description="Cancel the current Hack Hour session">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>
