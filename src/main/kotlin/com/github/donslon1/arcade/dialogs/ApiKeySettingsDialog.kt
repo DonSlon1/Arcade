@@ -5,7 +5,7 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.panel
 import javax.swing.JComponent
 
-class ApiKeySettingsDialog(initialApiKey: String = "", initialSlackId: String = "") : DialogWrapper(true) {
+class ApiKeySettingsDialog(initialApiKey: String, initialSlackId: String) : DialogWrapper(true) {
     private val apiKeyField = JBTextField(initialApiKey)
     private val slackIdField = JBTextField(initialSlackId)
 
