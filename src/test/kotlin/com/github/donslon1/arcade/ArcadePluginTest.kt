@@ -5,6 +5,6 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 class ArcadePluginTest : BasePlatformTestCase() {
 
     fun testPluginInitialization() {
-        assertEquals( "Basic assertion to ensure test framework is working",1, 1,)
+        assertTrue(true) // A simple assertion to check if the test environment is set up correctly
     }
 }
