@@ -3,7 +3,10 @@
     <!-- Other plugin information -->
     <id>com.github.donslon1.arcade</id>
     <name>Arcade</name>
-    <vendor>donslon1</vendor>
+    <vendor email="lukindihel@gmail.com">donslon1</vendor>
+    <version>1.0.1</version>
+    <description>A plugin to help you focus on your work by tracking your time and rewarding you for staying focused.</description>
+    <idea-version since-build="213.7172.25"/>
 
     <depends>com.intellij.modules.platform</depends>
 
