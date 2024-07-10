@@ -73,17 +73,24 @@ class ApiService(private val apiKey: String) {
         }
     }
 
-    fun getSessions(slackId: String): List<Session>? {
-        val (_, _, result) = Fuel.get("$baseUrl/api/history/$slackId")
-            .header(getHeaders())
-            .responseString()
+    fun getSessions(slackId: String): List<Session> {
+        try {
+            val (_, _, result) = Fuel.get("$baseUrl/api/history/$slackId")
+                .header(getHeaders())
+                .responseString()
 
-        return when (result) {
-            is Result.Success -> gson.fromJson(result.value, SessionListResponse::class.java).data
-            else -> {
-                logger.error("Failed to fetch sessions")
-                null
+            return when (result) {
+                is Result.Success -> {
+                    gson.fromJson(result.value, SessionListResponse::class.java).data
+                }
+                is Result.Failure -> {
+                    logger.warn("Failed to fetch sessions: ${result.error}")
+                    emptyList()
+                }
             }
+        } catch (e: Exception) {
+            logger.error("Error fetching sessions", e)
+            return emptyList()
         }
     }
 

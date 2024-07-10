@@ -3,6 +3,7 @@ package com.github.donslon1.arcade.services
 import com.intellij.openapi.components.*
 import com.intellij.openapi.project.Project
 
+@Service(Service.Level.PROJECT)
 @State(
     name = "ArcadeApiSettings",
     storages = [Storage("arcadeApiSettings.xml")]

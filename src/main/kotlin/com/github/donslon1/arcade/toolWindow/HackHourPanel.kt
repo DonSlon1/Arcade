@@ -118,10 +118,9 @@ class HackHourPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun updateSessionList() {
-        apiService?.getSessions(slackId)?.let { sessions ->
-            val sessionStrings = sessions.map { "${it.work} (${formatDuration(it.elapsed)})" }
-            sessionList.setListData(sessionStrings.toTypedArray())
-        }
+        val sessions = apiService?.getSessions(slackId) ?: emptyList()
+        val sessionStrings = sessions.map { "${it.work} (${formatDuration(it.elapsed)})" }
+        sessionList.setListData(sessionStrings.toTypedArray())
     }
 
     private fun updateCurrentSessionInfo() {

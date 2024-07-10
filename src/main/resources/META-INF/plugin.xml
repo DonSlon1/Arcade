@@ -10,7 +10,6 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <projectService serviceImplementation="com.github.donslon1.arcade.services.ApiSettings"/>
         <postStartupActivity implementation="com.github.donslon1.arcade.startup.ApiKeyStartupActivity"/>
         <toolWindow id="Hack Hour"
                     secondary="true"

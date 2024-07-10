@@ -1,3 +1,5 @@
+package com.github.donslon1.arcade
+
 import com.github.donslon1.arcade.services.ApiSettings
 import com.intellij.openapi.project.Project
 import org.junit.jupiter.api.BeforeEach
